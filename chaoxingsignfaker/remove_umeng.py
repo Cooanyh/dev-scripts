@@ -132,7 +132,63 @@ s=p.read_text()
 for line in ("    implementation libs.common\n","    implementation libs.asms\n"):
     assert s.count(line)==1, line
     s=s.replace(line,"")
-s=remove_lines(s,('buildConfigField("String", "umengChannel"',))
+# Keep the BuildConfig field for existing UI screens, but no SDK receives it.
+s=re.sub(r'(?m)^.*buildConfigField\("String", "umengChannel",.*
+# Match the whole signingConfigs block without relying on Windows path escaping.
+pattern = r'(?ms)^    signingConfigs \{\n.*?^    \}\n'
+s, count = re.subn(pattern, "", s, count=1)
+assert count == 1, "upstream signing config changed"
+assert s.count("signingConfig signingConfigs.chaoxingsignfaker") == 2
+s = s.replace("signingConfig signingConfigs.chaoxingsignfaker", "", 1)
+s = s.replace("signingConfig signingConfigs.chaoxingsignfaker", "signingConfig signingConfigs.debug", 1)
+p.write_text(s)
+print("removed Umeng dependencies and upstream signing key")
+
+p=root/"gradle/libs.versions.toml"
+s=p.read_text()
+for line in ("asms = ","common = "):
+    assert sum(x.startswith(line) for x in s.splitlines())==2, f"expected version and library for {line}"
+s="".join(x for x in s.splitlines(True) if not x.startswith(("asms = ","common = ")))
+p.write_text(s)
+
+# Precisely drop only the Umeng URL handler; preserve the LAUNCHER intent filter.
+p=root/"app/src/main/AndroidManifest.xml"
+s=p.read_text()
+pos=s.index('android:scheme="um.')
+start=s.rfind("<intent-filter>",0,pos)
+end=s.index("</intent-filter>",pos)+len("</intent-filter>")
+assert start!=-1 and s.count('android:scheme="um.')==1
+s=s[:start]+s[end:]
+assert 'android.intent.action.MAIN' in s and 'android.intent.category.LAUNCHER' in s
+assert 'android:scheme="um.' not in s
+p.write_text(s)
+print("removed only Umeng deep link; launcher preserved")
+
+p=root/"app/proguard-rules.pro"
+s=p.read_text()
+s=remove_lines(s,("-keep class com.umeng.","-dontwarn com.umeng.","-dontnote com.umeng.",
+                  "-keep class org.repackage.","-keep class com.uyumao.","-keep class com.uc.","-keep class com.efs."))
+p.write_text(s)
+
+p=base/"screen/WelcomeScreen.kt"
+s=p.read_text()
+disclosure='''使用SDK名称：友盟SDK
+服务类型：使用数据分析
+收集个人信息类型：设备信息（IMEI/MAC/Android ID/IDFA/OpenUDID/GUID/IP地址/SIM 卡 IMSI 信息等）
+隐私权政策链接：https://www.umeng.com/page/policy
+
+'''
+assert disclosure in s, "disclosure changed"
+p.write_text(s.replace(disclosure,""))
+print("removed Umeng disclosure")
+
+# No remaining SDK entry points. The UMengHelper name is a local offline facade.
+for p in (root/"app/src/main/java").rglob("*.kt"):
+    x=p.read_text()
+    for term in ("com.umeng.","MobclickAgent","UMConfigure.getOaid"):
+        assert term not in x, f"{term} in {p}"
+print("SUCCESS: source-level Umeng API and direct dependency removed")
+, '            buildConfigField("String", "umengChannel", "\\\"PrivacyEdition\\\"")', s)
 # Match the whole signingConfigs block without relying on Windows path escaping.
 pattern = r'(?ms)^    signingConfigs \{\n.*?^    \}\n'
 s, count = re.subn(pattern, "", s, count=1)
