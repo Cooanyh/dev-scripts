@@ -87,8 +87,8 @@ object UMengHelper {
     fun onStackbricksInstallTestChannelEvent(
         context: Context, name: String, versionData: StackbricksVersionData
     ) = Unit
-    fun onStackbricksCheckOnLaunchChanged(context: Context, name: String, status: Boolean) = Unit
-    fun onStackbricksTestChannelChanged(context: Context, name: String, status: Boolean) = Unit
+    fun onStackbricksCheckOnLaunchChangedEvent(context: Context, name: String, status: Boolean) = Unit
+    fun onStackbricksTestChannelChangedEvent(context: Context, name: String, status: Boolean) = Unit
 }
 ''')
 print("replaced", helper)
