@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android:
@@ -84,3 +84,23 @@ jobs:
           path: upstream/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish direct APK download to GitHub Release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="csf-no-umeng-1.19.4-debug-20261106"
+          APK="ChaoxingSignFaker-1.19.4-NoUmeng-debug.apk"
+          cp upstream/app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" | tee "$APK.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          else
+            gh release create "$TAG" "$APK" "$APK.sha256" \
+              --target "$GITHUB_SHA" \
+              --title "ChaoxingSignFaker 1.19.4 No-Umeng (unofficial debug)" \
+              --notes "Unofficial community modification removing Umeng SDK and preserving local sign counters. Debug-signed, not tested on physical devices. Other telemetry (Sentry/Supabase) and original security risks remain. Not an official release." \
+              --prerelease
+          fi
