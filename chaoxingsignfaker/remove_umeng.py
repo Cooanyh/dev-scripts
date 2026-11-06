@@ -133,20 +133,13 @@ for line in ("    implementation libs.common\n","    implementation libs.asms\n"
     assert s.count(line)==1, line
     s=s.replace(line,"")
 s=remove_lines(s,('buildConfigField("String", "umengChannel"',))
-keyconf='''    signingConfigs {
-        register("chaoxingsignfaker") {
-            storeFile file("..\\\\chaoxingsignfaker.jks")
-            storePassword System.getenv("keystorePassword")
-            keyAlias "chaoxingsignfaker"
-            keyPassword System.getenv("keystorePassword")
-        }
-    }
-'''
-assert s.count(keyconf)==1, "upstream signing config changed"
-s=s.replace(keyconf,"")
-assert s.count("signingConfig signingConfigs.chaoxingsignfaker")==2
-s=s.replace("signingConfig signingConfigs.chaoxingsignfaker","",1)  # release unsigned
-s=s.replace("signingConfig signingConfigs.chaoxingsignfaker","signingConfig signingConfigs.debug",1)
+# Match the whole signingConfigs block without relying on Windows path escaping.
+pattern = r'(?ms)^    signingConfigs \{\n.*?^    \}\n'
+s, count = re.subn(pattern, "", s, count=1)
+assert count == 1, "upstream signing config changed"
+assert s.count("signingConfig signingConfigs.chaoxingsignfaker") == 2
+s = s.replace("signingConfig signingConfigs.chaoxingsignfaker", "", 1)
+s = s.replace("signingConfig signingConfigs.chaoxingsignfaker", "signingConfig signingConfigs.debug", 1)
 p.write_text(s)
 print("removed Umeng dependencies and upstream signing key")
 
