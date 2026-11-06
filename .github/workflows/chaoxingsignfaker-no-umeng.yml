@@ -1,0 +1,86 @@
+name: Build ChaoxingSignFaker without Umeng
+
+on:
+  push:
+    branches:
+      - build/chaoxingsignfaker-no-umeng-20261106
+    paths:
+      - 'chaoxingsignfaker/**'
+      - '.github/workflows/chaoxingsignfaker-no-umeng.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned upstream source
+        uses: actions/checkout@v4
+        with:
+          repository: aquamarine5/ChaoxingSignFaker
+          ref: 071c2e07239b16b690d5eef01f8c514ab7a31d9c
+          path: upstream
+          persist-credentials: false
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform SDK 37
+        run: |
+          sdkmanager --install 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Apply no-Umeng patch
+        run: |
+          python3 chaoxingsignfaker/remove_umeng.py upstream
+          ! grep -R -nE 'com\.umeng\.|MobclickAgent|UMConfigure\.getOaid' upstream/app/src/main/java
+          grep -q 'android.intent.category.LAUNCHER' upstream/app/src/main/AndroidManifest.xml
+
+      - name: Gradle debug build
+        working-directory: upstream
+        env:
+          # GitHub Packages owner may require separate package access rights.
+          GHP_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Check compiled APK for Umeng components
+        if: success()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          apk=Path('upstream/app/build/outputs/apk/debug/app-debug.apk')
+          assert apk.exists(), 'Missing APK'
+          flags=[b'Lcom/umeng/',b'com/umeng/',b'Lcom/efs/',b'Lcom/uc/crashsdk/']
+          with zipfile.ZipFile(apk) as z:
+              for path in z.namelist():
+                  if path.endswith('.dex'):
+                      data=z.read(path)
+                      for flag in flags:
+                          assert flag not in data, f'Remaining SDK reference: {flag} in {path}'
+                  assert 'umeng' not in path.lower(), f'Remaining SDK asset: {path}'
+          print('PASS: no common Umeng class/SDK traces; size:',apk.stat().st_size)
+          PY
+
+      - name: Upload installable debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChaoxingSignFaker-NoUmeng-debug-apk
+          path: upstream/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
