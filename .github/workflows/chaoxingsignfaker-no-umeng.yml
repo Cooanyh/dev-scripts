@@ -34,13 +34,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android platform SDK 37
         run: |
-          sdkmanager --install 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          command -v sdkmanager
           yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
 
       - name: Apply no-Umeng patch
         run: |
