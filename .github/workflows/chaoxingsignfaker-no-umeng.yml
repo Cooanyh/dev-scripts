@@ -34,13 +34,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Install Android platform SDK 37
+      - name: Install available Android SDK (prefer 37)
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" --install 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
+          if ! "$SDKMANAGER" --channel=3 --install 'platforms;android-37' 'platform-tools'; then
+            echo "::warning::Android 37 unavailable from current SDK channels; falling back to SDK 36 for this diagnostic build"
+            "$SDKMANAGER" --install 'platforms;android-36' 'platform-tools'
+            sed -i 's/compileSdk = 37/compileSdk = 36/; s/targetSdk = 37/targetSdk = 36/' upstream/app/build.gradle
+          fi
 
       - name: Apply no-Umeng patch
         run: |
