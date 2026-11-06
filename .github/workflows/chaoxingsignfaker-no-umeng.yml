@@ -48,6 +48,14 @@ jobs:
           ! grep -R -nE 'com\.umeng\.|MobclickAgent|UMConfigure\.getOaid' upstream/app/src/main/java
           grep -q 'android.intent.category.LAUNCHER' upstream/app/src/main/AndroidManifest.xml
 
+      - name: Apply Course Check-in Assistant name and icon
+        run: |
+          python3 -m pip install --disable-pip-version-check cairosvg
+          python3 chaoxingsignfaker/brand_course_assistant.py upstream
+          grep -q '课程签到助手' upstream/app/src/main/res/values/strings.xml
+          test -s upstream/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+
       - name: Gradle debug build
         working-directory: upstream
         env:
@@ -80,7 +88,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ChaoxingSignFaker-NoUmeng-debug-apk
+          name: CourseCheckinAssistant-NoUmeng-debug-apk
           path: upstream/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -91,8 +99,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="csf-no-umeng-1.19.4-debug-20261106"
-          APK="ChaoxingSignFaker-1.19.4-NoUmeng-debug.apk"
+          TAG="course-checkin-assistant-1.19.4-no-umeng-20261106"
+          APK="CourseCheckinAssistant-1.19.4-NoUmeng-debug.apk"
           cp upstream/app/build/outputs/apk/debug/app-debug.apk "$APK"
           sha256sum "$APK" | tee "$APK.sha256"
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -100,7 +108,7 @@ jobs:
           else
             gh release create "$TAG" "$APK" "$APK.sha256" \
               --target "$GITHUB_SHA" \
-              --title "ChaoxingSignFaker 1.19.4 No-Umeng (unofficial debug)" \
-              --notes "Unofficial community modification removing Umeng SDK and preserving local sign counters. Debug-signed, not tested on physical devices. Other telemetry (Sentry/Supabase) and original security risks remain. Not an official release." \
+              --title "课程签到助手 1.19.4 | 去友盟版 (非官方)" \
+              --notes "非官方个人修改版，源自 aquamarine5/ChaoxingSignFaker，遵循原 AGPL-3.0 协议并保留作者署名。替换应用名称与青蓝签到图标，移除友盟 SDK，保留本地签到统计。Debug 签名，未做真机测试，无法保证覆盖安装；Sentry/Supabase 等第三方功能仍存在。" \
               --prerelease
           fi
