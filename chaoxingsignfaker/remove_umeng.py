@@ -183,6 +183,12 @@ assert disclosure in s, "disclosure changed"
 p.write_text(s.replace(disclosure,""))
 print("removed Umeng disclosure")
 
+# The original presentation-only Umeng logo must not be shipped either.
+logo = root / "app/src/main/res/drawable/ic_umeng.xml"
+if logo.exists():
+    logo.unlink()
+    print("removed unused Umeng logo asset")
+
 # No remaining SDK entry points. The UMengHelper name is a local offline facade.
 for p in (root/"app/src/main/java").rglob("*.kt"):
     x=p.read_text()
