@@ -132,8 +132,9 @@ s=p.read_text()
 for line in ("    implementation libs.common\n","    implementation libs.asms\n"):
     assert s.count(line)==1, line
     s=s.replace(line,"")
-# Keep the BuildConfig field for existing UI screens, but no SDK receives it.
-s=re.sub(r'(?m)^.*buildConfigField\("String", "umengChannel",.*
+# Keep a local channel label for existing UI screens, but no Umeng SDK receives it.
+channel_line = '            buildConfigField("String", "umengChannel", "' + chr(92) + '"PrivacyEdition' + chr(92) + '"")' + chr(10)
+s = ''.join(channel_line if 'buildConfigField("String", "umengChannel"' in line else line for line in s.splitlines(True))
 # Match the whole signingConfigs block without relying on Windows path escaping.
 pattern = r'(?ms)^    signingConfigs \{\n.*?^    \}\n'
 s, count = re.subn(pattern, "", s, count=1)
