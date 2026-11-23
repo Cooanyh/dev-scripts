@@ -50,6 +50,9 @@ jobs:
           GHP_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
         run: |
           chmod +x gradlew
+          # This private release does not require R8 shrinking or remote Sentry mapping uploads.
+          sed -i 's/minifyEnabled true/minifyEnabled false/;s/shrinkResources true/shrinkResources false/' app/build.gradle
+          sed -i '/optimization {/,/}/s/enable = true/enable = false/' app/build.gradle
           ./gradlew --no-daemon :app:assembleRelease -x :app:uploadSentryProguardMappingsRelease
           ls -lah app/build/outputs/apk/release/
           test -s app/build/outputs/apk/release/app-release-unsigned.apk
@@ -59,10 +62,9 @@ jobs:
           mkdir -p signer-tools/lib unsigned
           cp "$ANDROID_HOME/build-tools/37.0.0/apksigner" signer-tools/apksigner
           cp "$ANDROID_HOME/build-tools/37.0.0/lib/apksigner.jar" signer-tools/lib/apksigner.jar
-          cp "$ANDROID_HOME/build-tools/37.0.0/zipalign" signer-tools/zipalign
           cp upstream/app/build/outputs/apk/release/app-release-unsigned.apk unsigned/StudyHelper-1.20.0-coren1-unsigned.apk
-          chmod +x signer-tools/apksigner signer-tools/zipalign
-          signer-tools/zipalign -c -p 4 unsigned/StudyHelper-1.20.0-coren1-unsigned.apk
+          chmod +x signer-tools/apksigner
+          "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -p 4 unsigned/StudyHelper-1.20.0-coren1-unsigned.apk
       - name: Upload unsigned release and signer tools
         uses: actions/upload-artifact@v4
         with:
