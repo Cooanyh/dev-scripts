@@ -50,7 +50,7 @@ jobs:
           GHP_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleRelease
+          ./gradlew --no-daemon :app:assembleRelease -x :app:uploadSentryProguardMappingsRelease
           ls -lah app/build/outputs/apk/release/
           test -s app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Collect unsigned APK and Android signing tools
