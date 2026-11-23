@@ -1,0 +1,74 @@
+name: Prepare unsigned StudyHelper Release APK and local signing tools
+
+on:
+  push:
+    branches:
+      - build/studyhelper-v120-oss-20261123
+    paths:
+      - '.github/workflows/studyhelper-unsigned-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_unsigned:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream source
+        uses: actions/checkout@v4
+        with:
+          repository: aquamarine5/ChaoxingSignFaker
+          ref: 24fe193d03d2140d572eea3e58d27f7868504dcb
+          path: upstream
+          persist-credentials: false
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android SDK 37.0
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --channel=3 --install 'platforms;android-37.0' 'build-tools;37.0.0' 'platform-tools'
+      - name: Apply privacy and brand and dual-channel patches
+        run: |
+          python3 -m pip install --disable-pip-version-check cairosvg
+          python3 chaoxingsignfaker/remove_umeng.py upstream
+          python3 chaoxingsignfaker/brand_course_assistant.py upstream
+          python3 chaoxingsignfaker/apply_dual_update_v120.py upstream
+          grep -q 'versionCode = 1_2000_1121' upstream/app/build.gradle
+          grep -q '课程签到助手' upstream/app/src/main/res/values/strings.xml
+      - name: Build unsigned optimized release APK
+        working-directory: upstream
+        env:
+          GHP_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleRelease
+          ls -lah app/build/outputs/apk/release/
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Collect unsigned APK and Android signing tools
+        run: |
+          set -euo pipefail
+          mkdir -p signer-tools/lib unsigned
+          cp "$ANDROID_HOME/build-tools/37.0.0/apksigner" signer-tools/apksigner
+          cp "$ANDROID_HOME/build-tools/37.0.0/lib/apksigner.jar" signer-tools/lib/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/37.0.0/zipalign" signer-tools/zipalign
+          cp upstream/app/build/outputs/apk/release/app-release-unsigned.apk unsigned/StudyHelper-1.20.0-coren1-unsigned.apk
+          chmod +x signer-tools/apksigner signer-tools/zipalign
+          signer-tools/zipalign -c -p 4 unsigned/StudyHelper-1.20.0-coren1-unsigned.apk
+      - name: Upload unsigned release and signer tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: StudyHelper-unsigned-release-and-signing-tools
+          path: |
+            unsigned/
+            signer-tools/
+          if-no-files-found: error
+          retention-days: 7
