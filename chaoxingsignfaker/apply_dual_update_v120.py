@@ -106,6 +106,55 @@ new_block='''        // Community OSS first; never silently replace the signed c
 s=s[:start]+new_block+s[end:]
 settings.write_text(s,encoding="utf-8")
 
+# Course list's automatic check must also select our OSS channel first. The
+# official service stays in MainActivity for the read-only Settings card.
+main=pkg/"MainActivity.kt"
+m=main.read_text(encoding="utf-8")
+the_import="import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.OssCheckedPackageProvider\n"
+assert the_import not in m
+main_marker="import org.aquamarine5.brainspark.stackbricks.StackbricksPolicy\n"
+assert main_marker in m
+m=m.replace(main_marker,main_marker+the_import,1)
+block_start=m.index("                        val stackbricksService = remember {")
+block_end=m.index("                        Column(\n                            modifier =",block_start)
+insert='''                        val communityUpdateState = rememberStackbricksStatus()
+                        val communityUpdateService = remember {
+                            val ossConfiguration = CloudflareConfiguration(
+                                possibleConfigurations = listOf(
+                                    "static.coren.xin" to "software/update/studyhelper/stackbricks_manifest.json"
+                                ),
+                                defaultBaseUrl = "https://static.coren.xin",
+                            )
+                            StackbricksService(
+                                this,
+                                possibleMessageProvider = listOf(
+                                    CloudflareMessageProvider(ossConfiguration)
+                                ),
+                                possiblePackageProvider = listOf(
+                                    OssCheckedPackageProvider(CloudflarePackageProvider(ossConfiguration))
+                                ),
+                                state = communityUpdateState,
+                                stackbricksPolicy = StackbricksPolicy(
+                                    versionName = BuildConfig.VERSION_NAME,
+                                    isAllowedToDisableCheckUpdateOnLaunch = true,
+                                    isForceInstallValueCallback = false,
+                                ),
+                            )
+                        }
+'''
+m=m[:block_end]+insert+m[block_end:]
+target='''                                                    CourseListScreen(
+                                                        entry.toRoute(),
+                                                        stackbricksService,
+'''
+replacement='''                                                    CourseListScreen(
+                                                        entry.toRoute(),
+                                                        communityUpdateService,
+'''
+assert target in m
+m=m.replace(target,replacement,1)
+main.write_text(m,encoding="utf-8")
+
 provider=pkg/"utilities/OssCheckedPackageProvider.kt"
 provider.write_text('''/*
  * Independent community update verification for the AGPL-3.0 application.
