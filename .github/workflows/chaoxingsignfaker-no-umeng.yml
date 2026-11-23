@@ -1,9 +1,9 @@
-name: Build ChaoxingSignFaker without Umeng
+name: Build StudyHelper v1.20.0 with dual OSS + upstream update channels
 
 on:
   push:
     branches:
-      - build/chaoxingsignfaker-no-umeng-20261106
+      - build/studyhelper-v120-oss-20261123
     paths:
       - 'chaoxingsignfaker/**'
       - '.github/workflows/chaoxingsignfaker-no-umeng.yml'
@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: aquamarine5/ChaoxingSignFaker
-          ref: 071c2e07239b16b690d5eef01f8c514ab7a31d9c
+          ref: 24fe193d03d2140d572eea3e58d27f7868504dcb
           path: upstream
           persist-credentials: false
 
@@ -56,14 +56,30 @@ jobs:
           test -s upstream/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
 
-      - name: Gradle debug build
+      - name: Apply priority OSS update channel
+        run: |
+          python3 chaoxingsignfaker/apply_dual_update_v120.py upstream
+
+      - name: Configure stable signing if GitHub Secrets are present
+        env:
+          STUDYHELPER_KEYSTORE_BASE64: ${{ secrets.STUDYHELPER_KEYSTORE_BASE64 }}
+          STUDYHELPER_KEYSTORE_PASSWORD: ${{ secrets.STUDYHELPER_KEYSTORE_PASSWORD }}
+        run: |
+          python3 chaoxingsignfaker/prepare_signing_v120.py upstream
+
+      - name: Build Android APK
         working-directory: upstream
         env:
-          # GitHub Packages owner may require separate package access rights.
           GHP_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
+          STUDYHELPER_KEYSTORE_PASSWORD: ${{ secrets.STUDYHELPER_KEYSTORE_PASSWORD }}
+          STUDYHELPER_SIGNING_KEYSTORE_FILE: ${{ runner.temp }}/studyhelper-release.p12
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+          if [ "$(cat studyhelper_signing_mode.txt)" = signed ]; then
+            ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          else
+            ./gradlew --no-daemon --stacktrace :app:assembleDebug
+          fi
 
       - name: Check compiled APK for Umeng components
         if: success()
@@ -71,7 +87,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import zipfile
-          apk=Path('upstream/app/build/outputs/apk/debug/app-debug.apk')
+          mode=Path('upstream/studyhelper_signing_mode.txt').read_text().strip()
+          apk=Path('upstream/app/build/outputs/apk/release/app-release.apk' if mode=='signed' else 'upstream/app/build/outputs/apk/debug/app-debug.apk')
           assert apk.exists(), 'Missing APK'
           flags=[b'Lcom/umeng/',b'com/umeng/',b'Lcom/efs/',b'Lcom/uc/crashsdk/']
           with zipfile.ZipFile(apk) as z:
@@ -84,31 +101,44 @@ jobs:
           print('PASS: no common Umeng class/SDK traces; size:',apk.stat().st_size)
           PY
 
-      - name: Upload installable debug APK
+      - name: Create complete OSS upload package
+        if: success()
+        run: |
+          python3 chaoxingsignfaker/make_oss_bundle_v120.py upstream output_dist
+          find output_dist -maxdepth 5 -type f -printf '%P (%s bytes)\n'
+
+      - name: Upload generated OSS package to GitHub Actions
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CourseCheckinAssistant-NoUmeng-debug-apk
-          path: upstream/app/build/outputs/apk/debug/app-debug.apk
+          name: StudyHelper-v120-OSS-outputs
+          path: output_dist/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
-      - name: Publish direct APK download to GitHub Release
+      - name: Publish APK and OSS package via GitHub Release
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="course-checkin-assistant-1.19.4-no-umeng-20261106"
-          APK="CourseCheckinAssistant-1.19.4-NoUmeng-debug.apk"
-          cp upstream/app/build/outputs/apk/debug/app-debug.apk "$APK"
-          sha256sum "$APK" | tee "$APK.sha256"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          MODE="$(cat upstream/studyhelper_signing_mode.txt)"
+          if [ "$MODE" = signed ]; then
+            TAG="studyhelper-v1.20.0-coren1"
+            PACKAGE="output_dist/StudyHelper-OSS-READY-1.20.0-coren1.zip"
           else
-            gh release create "$TAG" "$APK" "$APK.sha256" \
+            TAG="studyhelper-v1.20.0-coren1-preview"
+            PACKAGE="output_dist/StudyHelper-OSS-PREVIEW-DO-NOT-UPLOAD.zip"
+          fi
+          DIR="output_dist/software/update/studyhelper"
+          APK="$(find "$DIR" -maxdepth 1 -name '*.apk' -print -quit)"
+          test -s "$APK" && test -s "$PACKAGE"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$PACKAGE" "$DIR/stackbricks_manifest.json" "$DIR/SHA256SUMS.txt" --clobber
+          else
+            gh release create "$TAG" "$APK" "$PACKAGE" "$DIR/stackbricks_manifest.json" "$DIR/SHA256SUMS.txt" \
               --target "$GITHUB_SHA" \
-              --title "课程签到助手 1.19.4 | 去友盟版 (非官方)" \
-              --notes "非官方个人修改版，源自 aquamarine5/ChaoxingSignFaker，遵循原 AGPL-3.0 协议并保留作者署名。替换应用名称与青蓝签到图标，移除友盟 SDK，保留本地签到统计。Debug 签名，未做真机测试，无法保证覆盖安装；Sentry/Supabase 等第三方功能仍存在。" \
+              --title "课程签到助手 1.20.0-coren1 (${MODE})" \
+              --notes "Un-official AGPL-3.0-derived StudyHelper based on upstream 1.20.0. Own OSS installable updates take priority; official channel retained read-only due signing differences. Requires stable GitHub Secrets before production OSS deployment. Source: https://github.com/Cooanyh/dev-scripts/tree/build/studyhelper-v120-oss-20261123/chaoxingsignfaker." \
               --prerelease
           fi
