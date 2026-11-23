@@ -114,6 +114,7 @@ package org.aquamarine5.brainspark.chaoxingsignfaker.utilities
 
 import android.content.Context
 import androidx.compose.runtime.MutableState
+import androidx.core.content.pm.PackageInfoCompat
 import org.aquamarine5.brainspark.chaoxingsignfaker.BuildConfig
 import org.aquamarine5.brainspark.stackbricks.StackbricksDownloadPath
 import org.aquamarine5.brainspark.stackbricks.StackbricksPackageFile
@@ -167,7 +168,7 @@ class OssCheckedPackageProvider(
                 require(info.packageName == BuildConfig.APPLICATION_ID) {
                     "Wrong APK package name: " + info.packageName
                 }
-                require(info.longVersionCode == versionData.versionCode.toLong()) {
+                require(PackageInfoCompat.getLongVersionCode(info) == versionData.versionCode.toLong()) {
                     "APK version does not match update manifest"
                 }
             }
