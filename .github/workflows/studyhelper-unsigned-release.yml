@@ -53,7 +53,7 @@ jobs:
           # This private release does not require R8 shrinking or remote Sentry mapping uploads.
           sed -i 's/minifyEnabled true/minifyEnabled false/;s/shrinkResources true/shrinkResources false/' app/build.gradle
           sed -i '/optimization {/,/}/s/enable = true/enable = false/' app/build.gradle
-          ./gradlew --no-daemon :app:assembleRelease -x :app:uploadSentryProguardMappingsRelease
+          ./gradlew --no-daemon :app:assembleRelease
           ls -lah app/build/outputs/apk/release/
           test -s app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Collect unsigned APK and Android signing tools
